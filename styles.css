@@ -1,0 +1,147 @@
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f0f0f0;
+  margin: 0;
+  padding: 0;
+}
+
+.header-container {
+  background-color: #4a90e2;
+  color: white;
+  padding: 20px;
+  text-align: center;
+}
+
+#cityInput {
+  padding: 10px;
+  margin: 10px;
+  font-size: 1em;
+}
+
+#searchButton {
+  padding: 10px;
+  font-size: 1em;
+}
+
+#airQualityMap {
+  height: 400px;
+  margin: 20px auto;
+  width: 90%;
+}
+
+#current-aqi {
+  background: linear-gradient(to bottom, #a8e063, #56ab2f);
+  color: white;
+  text-align: center;
+  padding: 30px;
+  margin: 20px;
+  border-radius: 15px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+}
+
+.aqi-large {
+  font-size: 5em;
+  font-weight: bold;
+  margin: 0;
+}
+
+.aqi-category {
+  font-size: 2em;
+  margin: 10px 0;
+}
+
+#pollutants {
+  background: white;
+  padding: 20px;
+  margin: 20px;
+  border-radius: 15px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+th, td {
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background-color: #4a90e2;
+  color: white;
+}
+
+.chart-container {
+  width: 90%;
+  margin: 0 auto;
+  padding: 20px;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  max-height: 500px;
+  overflow: hidden;
+}
+
+#most-polluted {
+  background: white;
+  padding: 20px;
+  margin: 20px;
+  border-radius: 15px;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+}
+/* AQI Category Backgrounds */
+.aqi-good { background-color: #a8e063; color: white; }
+.aqi-moderate { background-color: #ffeb3b; color: black; }
+.aqi-unhealthy { background-color: #ff5722; color: white; }
+.aqi-very-unhealthy { background-color: #9c27b0; color: white; }
+.aqi-hazardous { background-color: #b71c1c; color: white; }
+
+/* Progress Bars */
+.pollutant-bar-container {
+  margin: 10px 0;
+}
+.pollutant-bar {
+  background-color: #ddd;
+  border-radius: 5px;
+  overflow: hidden;
+  width: 100%;
+  height: 20px;
+}
+.pollutant-bar-fill {
+  height: 100%;
+  text-align: right;
+  line-height: 20px;
+  padding-right: 5px;
+  color: white;
+  font-size: 12px;
+  border-radius: 5px;
+}
+
+/* Health Recommendations */
+#recommendations {
+  margin: 20px 0;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+#recommendations-list {
+  list-style: none;
+  padding: 0;
+}
+#recommendations-list li {
+  margin: 10px 0;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+#globeViz {
+  width: 100%;
+  height: 500px;
+}
+
