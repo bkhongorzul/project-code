@@ -1,133 +1,180 @@
 const API_KEY = '5aaa6429a7f9a93680524c2b38864288';
 let globe;
 
+// Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-  console.log("Page loaded. Attempting to initialize the globe...");
+  initializeGlobe();
+  initializeCharts();
 
-  // Wait until external libraries are fully loaded
-  window.addEventListener('load', () => {
-    if (typeof Globe !== 'undefined') {
-      initializeGlobe();
-    } else {
-      console.error("Globe library not loaded properly.");
-    }
-  });
-
+  // Handle search functionality
   document.getElementById('searchButton').addEventListener('click', () => {
-    const city = document.getElementById('cityInput').value;
+    const city = document.getElementById('cityInput').value.trim();
     if (city) {
-      console.log(`Searching for city: ${city}`);
+      clearPreviousCityData();
       fetchCityCoordinates(city).then(coords => {
         if (coords) {
-          updateGlobe(coords.lat, coords.lon, city);
-          fetchAirQualityData(coords.lat, coords.lon);
+          fetchAirQualityData(coords.lat, coords.lon, coords.temperature, coords.humidity, city);
         } else {
-          console.error("Failed to fetch coordinates for the city.");
+          alert("City not found.");
         }
       });
+    } else {
+      alert("Please enter a city name.");
     }
   });
+
+  // Navigation buttons
+  document.getElementById('navHome').addEventListener('click', () => showSection('home'));
+  document.getElementById('navData').addEventListener('click', () => showSection('data'));
+  document.getElementById('navRanking').addEventListener('click', fetchWorldRanking);
+  document.getElementById('navAbout').addEventListener('click', () => showSection('about'));
 });
 
+// Initialize the globe with original size and settings
 const initializeGlobe = () => {
-  try {
-    const globeContainer = document.getElementById('globeViz');
-    if (!globeContainer) {
-      throw new Error("Globe container not found");
-    }
+  globe = Globe()
+    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+    .backgroundColor('#000')(document.getElementById('globeViz'));
 
-    // Initialize the globe
-    globe = Globe()
-      .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-      .backgroundColor('rgba(0, 0, 0, 0.7)')(globeContainer); // Set semi-transparent background
+  globe.pointOfView({ lat: 0, lng: 0, altitude: 2 });
 
-    console.log("Globe initialized successfully.");
-    globe.pointOfView({ lat: 20, lng: 0, altitude: 2 }, 2000);
-  } catch (error) {
-    console.error("Error initializing globe:", error);
-  }
+  globe.labelsData([
+    { lat: 37.5665, lng: 126.9780, name: 'Seoul' },
+    { lat: 40.7128, lng: -74.0060, name: 'New York' },
+    { lat: 51.5074, lng: -0.1278, name: 'London' },
+  ])
+    .labelLat(d => d.lat)
+    .labelLng(d => d.lng)
+    .labelText(d => d.name)
+    .labelSize(0.5)
+    .labelColor(() => 'white');
 };
 
+// Fetch city coordinates
 const fetchCityCoordinates = async (city) => {
   try {
     const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch city coordinates');
+    if (response.ok) {
+      const data = await response.json();
+      const coords = { lat: data.coord.lat, lon: data.coord.lon, temperature: data.main.temp, humidity: data.main.humidity };
+
+      globe.pointOfView({ lat: coords.lat, lng: coords.lon, altitude: 1.5 });
+
+      return coords;
+    } else {
+      alert("City not found.");
+      return null;
     }
-    const data = await response.json();
-    console.log("City coordinates:", data.coord);
-    return {
-      lat: data.coord.lat,
-      lon: data.coord.lon,
-      temperature: data.main.temp,
-      humidity: data.main.humidity,
-    };
   } catch (error) {
-    console.error('Error fetching city coordinates:', error);
+    console.error("Error fetching city coordinates:", error);
+    alert("Network error. Please try again.");
     return null;
   }
 };
 
-const updateGlobe = (lat, lon, city) => {
-  try {
-    console.log(`Updating globe view to: Latitude ${lat}, Longitude ${lon}`);
-    if (globe) {
-      globe.pointOfView({ lat, lng: lon, altitude: 1.5 }, 2000);
-      globe.pointsData([
-        { lat, lon, size: 1, color: 'blue', label: city }
-      ])
-      .pointAltitude(() => 0.05)
-      .pointColor(d => d.color)
-      .pointLabel(d => d.label)
-      .onPointClick((point) => {
-        // When clicking on a city marker, show the air quality details
-        fetchAirQualityData(point.lat, point.lon, point.label);
-      });
-    } else {
-      console.error("Globe instance not initialized.");
-    }
-  } catch (error) {
-    console.error("Error updating globe view:", error);
-  }
-};
-
-const fetchAirQualityData = async (lat, lon, city) => {
+// Fetch air quality data
+const fetchAirQualityData = async (lat, lon, temperature, humidity, city) => {
   try {
     const response = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch air quality data');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.list && data.list[0] && data.list[0].components) {
+        displayAirQualityInfo(data, temperature, humidity, city);
+        updateCharts(data.list[0].components); // Pass the pollutant data correctly
+      } else {
+        alert("No pollutant data available for this location.");
+      }
+    } else {
+      alert("Failed to fetch air quality data.");
     }
-    const data = await response.json();
-    displayAirQualityInfo(data, city);
   } catch (error) {
-    console.error('Error fetching air quality data:', error);
+    console.error("Error fetching air quality data:", error);
+    alert("Network error. Please try again.");
   }
 };
 
-const displayAirQualityInfo = (data, city) => {
-  if (data && data.list && data.list.length > 0) {
-    const aqi = data.list[0].main.aqi;
-    const { pm2_5, pm10, co, no2, nh3, so2, voc } = data.list[0].components;
+// Display air quality information
+const displayAirQualityInfo = (data, temperature, humidity, city) => {
+  const aqi = data.list[0].main.aqi;
+  const aqiQuality = getAqiQuality(aqi);
 
-    document.getElementById('cityName').textContent = city;
-    document.getElementById('aqiValue').textContent = aqi;
-    document.getElementById('temperature').textContent = `${data.temperature} °C`;
-    document.getElementById('humidity').textContent = `${data.humidity} %`;
-    document.getElementById('pm25').textContent = pm2_5 ? `${pm2_5} µg/m³` : '--';
-    document.getElementById('pm10').textContent = pm10 ? `${pm10} µg/m³` : '--';
-    document.getElementById('nox').textContent = no2 ? `${no2} ppb` : '--';
-    document.getElementById('nh3').textContent = nh3 ? `${nh3} ppb` : '--';
-    document.getElementById('co2').textContent = '--'; // Placeholder, as CO2 data is not available from OpenWeatherMap
-    document.getElementById('so2').textContent = so2 ? `${so2} ppb` : '--';
-    document.getElementById('voc').textContent = voc ? `${voc} ppb` : '--';
-
-    // Show the details section
-    document.getElementById('aqi-details').style.display = 'block';
-  } else {
-    alert("No air quality data available.");
-  }
+  document.getElementById('cityName').textContent = city;
+  document.getElementById('aqiValue').textContent = aqi;
+  document.getElementById('aqiQuality').textContent = aqiQuality;
+  document.getElementById('temperature').textContent = temperature;
+  document.getElementById('humidity').textContent = humidity;
+  document.getElementById('cityDetails').style.display = 'block';
 };
 
-function closeDetails() {
-  document.getElementById('aqi-details').style.display = 'none';
-}
+const getAqiQuality = (aqi) => {
+  if (aqi === 1) return 'Good';
+  if (aqi === 2) return 'Fair';
+  if (aqi === 3) return 'Moderate';
+  if (aqi === 4) return 'Poor';
+  if (aqi === 5) return 'Very Poor';
+  return 'Unknown';
+};
+
+// Initialize charts
+let lineChart, barChart, doughnutChart;
+
+const initializeCharts = () => {
+  const lineCtx = document.getElementById('lineChart').getContext('2d');
+  const barCtx = document.getElementById('barChart').getContext('2d');
+  const doughnutCtx = document.getElementById('doughnutChart').getContext('2d');
+
+  lineChart = new Chart(lineCtx, {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Pollutants', data: [], borderColor: 'blue', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: true },
+  });
+
+  barChart = new Chart(barCtx, {
+    type: 'bar',
+    data: { labels: ['PM2.5', 'PM10', 'NO2', 'NH3', 'SO2'], datasets: [{ label: 'Levels', data: [], backgroundColor: ['red', 'blue', 'green', 'yellow', 'purple'] }] },
+    options: { responsive: true, maintainAspectRatio: true },
+  });
+
+  doughnutChart = new Chart(doughnutCtx, {
+    type: 'doughnut',
+    data: { labels: ['PM2.5', 'PM10', 'NO2', 'NH3', 'SO2'], datasets: [{ data: [], backgroundColor: ['red', 'blue', 'green', 'yellow', 'purple'] }] },
+    options: { responsive: true, maintainAspectRatio: true },
+  });
+};
+
+const updateCharts = (components) => {
+  const { pm2_5, pm10, no2, nh3, so2 } = components;
+
+  // Ensure the pollutant data is displayed correctly on the charts
+  lineChart.data.labels = ['PM2.5', 'PM10', 'NO2', 'NH3', 'SO2'];
+  lineChart.data.datasets[0].data = [pm2_5, pm10, no2, nh3, so2];
+  lineChart.update();
+
+  barChart.data.datasets[0].data = [pm2_5, pm10, no2, nh3, so2];
+  barChart.update();
+
+  doughnutChart.data.datasets[0].data = [pm2_5, pm10, no2, nh3, so2];
+  doughnutChart.update();
+};
+
+
+const clearPreviousCityData = () => {
+  document.getElementById('cityDetails').style.display = 'none';
+  document.getElementById('cityName').textContent = '';
+  document.getElementById('aqiValue').textContent = '';
+  document.getElementById('aqiQuality').textContent = '';
+  document.getElementById('temperature').textContent = '';
+  document.getElementById('humidity').textContent = '';
+};
+
+const showSection = (section) => {
+  document.getElementById('globeViz').style.display = 'none';
+  document.getElementById('dataSection').style.display = 'none';
+  document.getElementById('rankingSection').style.display = 'none';
+  document.getElementById('aboutSection').style.display = 'none';
+
+  if (section === 'home') document.getElementById('globeViz').style.display = 'block';
+  if (section === 'data') document.getElementById('dataSection').style.display = 'block';
+  if (section === 'ranking') document.getElementById('rankingSection').style.display = 'block';
+  if (section === 'about') document.getElementById('aboutSection').style.display = 'block';
+};

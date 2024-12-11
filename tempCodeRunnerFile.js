@@ -1,186 +1,180 @@
 const API_KEY = '5aaa6429a7f9a93680524c2b38864288';
-
-document.addEventListener('DOMContentLoaded', () => {
-  console.log("Initializing globe...");
-  initializeGlobe();
-  console.log("Attempting to get location and fetch data...");
-  getLocationAndFetchData();
-
-  document.getElementById('searchButton').addEventListener('click', () => {
-    const city = document.getElementById('cityInput').value;
-    if (city) {
-      console.log(`Searching for city: ${city}`);
-      fetchCityCoordinates(city).then(coords => {
-        if (coords) {
-          updateGlobe(coords.lat, coords.lon, city);
-          fetchAirQualityData(coords.lat, coords.lon);
-        } else {
-          console.error("Failed to fetch coordinates for the city.");
-        }
-      });
-    }
-  });
-});
-
 let globe;
 
-const initializeGlobe = () => {
-  try {
-    const globeContainer = document.getElementById('globeViz');
-    if (!globeContainer) {
-      console.error("Globe container not found");
-      return;
+// Initialize the application
+document.addEventListener('DOMContentLoaded', () => {
+  initializeGlobe();
+  initializeCharts();
+
+  // Handle search functionality
+  document.getElementById('searchButton').addEventListener('click', () => {
+    const city = document.getElementById('cityInput').value.trim();
+    if (city) {
+      clearPreviousCityData();
+      fetchCityCoordinates(city).then(coords => {
+        if (coords) {
+          fetchAirQualityData(coords.lat, coords.lon, coords.temperature, coords.humidity, city);
+        } else {
+          alert("City not found.");
+        }
+      });
+    } else {
+      alert("Please enter a city name.");
     }
+  });
 
-    globe = Globe()
-      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
-      .backgroundColor('#000') // Black background for better visibility
-      (globeContainer);
+  // Navigation buttons
+  document.getElementById('navHome').addEventListener('click', () => showSection('home'));
+  document.getElementById('navData').addEventListener('click', () => showSection('data'));
+  document.getElementById('navRanking').addEventListener('click', fetchWorldRanking);
+  document.getElementById('navAbout').addEventListener('click', () => showSection('about'));
+});
 
-    // Add some example markers to check if the globe is visible
-    console.log("Adding initial points to globe...");
-    globe
-      .pointsData([
-        { lat: 0, lon: 0, size: 1, color: 'yellow', label: 'Equator' },
-        { lat: 37.7749, lon: -122.4194, size: 1, color: 'red', label: 'San Francisco' }
-      ])
-      .pointAltitude(() => 0.05)
-      .pointColor(d => d.color)
-      .pointLabel(d => d.label);
+// Initialize the globe with original size and settings
+const initializeGlobe = () => {
+  globe = Globe()
+    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+    .backgroundColor('#000')(document.getElementById('globeViz'));
 
-    // Set initial camera view to verify visibility
-    globe.pointOfView({ lat: 20, lng: 0, altitude: 2 }, 2000);
-    console.log("Globe initialized successfully.");
+  globe.pointOfView({ lat: 0, lng: 0, altitude: 2 });
 
-  } catch (error) {
-    console.error("Error initializing globe:", error);
-  }
+  globe.labelsData([
+    { lat: 37.5665, lng: 126.9780, name: 'Seoul' },
+    { lat: 40.7128, lng: -74.0060, name: 'New York' },
+    { lat: 51.5074, lng: -0.1278, name: 'London' },
+  ])
+    .labelLat(d => d.lat)
+    .labelLng(d => d.lng)
+    .labelText(d => d.name)
+    .labelSize(0.5)
+    .labelColor(() => 'white');
 };
 
-const getLocationAndFetchData = () => {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(position => {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      console.log(`Geolocation coordinates: Latitude ${lat}, Longitude ${lon}`);
-      updateGlobe(lat, lon, 'Your Location');
-      fetchAirQualityData(lat, lon);
-    }, error => {
-      console.error("Error getting geolocation:", error);
-    });
-  } else {
-    console.warn("Geolocation is not supported by this browser.");
-  }
-};
-
-const updateGlobe = (lat, lon, city) => {
-  try {
-    console.log(`Updating globe view to: Latitude ${lat}, Longitude ${lon}`);
-    globe
-      .pointOfView({ lat, lng: lon, altitude: 1.5 }, 2000)
-      .pointsData([{ lat, lon, size: 1, color: 'blue', label: city }])
-      .labelsData([{ lat, lon, city }])
-      .labelText(d => `${d.city}: Loading AQI...`)
-      .labelSize(1.5);
-  } catch (error) {
-    console.error("Error updating globe view:", error);
-  }
-};
-
+// Fetch city coordinates
 const fetchCityCoordinates = async (city) => {
   try {
-    const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch city coordinates');
+    const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`);
+    if (response.ok) {
+      const data = await response.json();
+      const coords = { lat: data.coord.lat, lon: data.coord.lon, temperature: data.main.temp, humidity: data.main.humidity };
+
+      globe.pointOfView({ lat: coords.lat, lng: coords.lon, altitude: 1.5 });
+
+      return coords;
+    } else {
+      alert("City not found.");
+      return null;
     }
-    const data = await response.json();
-    console.log("City coordinates:", data.coord);
-    return {
-      lat: data.coord.lat,
-      lon: data.coord.lon,
-    };
   } catch (error) {
-    console.error('Error fetching city coordinates:', error);
+    console.error("Error fetching city coordinates:", error);
+    alert("Network error. Please try again.");
     return null;
   }
 };
 
-const fetchAirQualityData = async (lat, lon) => {
+// Fetch air quality data
+const fetchAirQualityData = async (lat, lon, temperature, humidity, city) => {
   try {
     const response = await fetch(`https://api.openweathermap.org/data/2.5/air_pollution?lat=${lat}&lon=${lon}&appid=${API_KEY}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch air quality data');
-    }
-    const data = await response.json();
-    console.log('Air Quality Data:', data);
-    updateDashboard(data, lat, lon);
-  } catch (error) {
-    console.error('Error fetching air quality data:', error);
-  }
-};
-
-const updateDashboard = (data, lat, lon) => {
-  try {
-    if (data && data.list && data.list.length > 0) {
-      const aqi = data.list[0].main.aqi;
-      const { pm2_5, pm10, co, no2 } = data.list[0].components;
-
-      // Update AQI in dashboard
-      const categories = ['Good', 'Fair', 'Moderate', 'Poor', 'Very Poor'];
-      const categoryClasses = ['aqi-good', 'aqi-moderate', 'aqi-unhealthy', 'aqi-very-unhealthy', 'aqi-hazardous'];
-
-      const aqiCategory = categories[aqi - 1];
-      document.getElementById('aqi-level').textContent = aqi;
-      document.getElementById('aqi-category').textContent = `Air Quality is ${aqiCategory}`;
-      document.getElementById('current-aqi').className = categoryClasses[aqi - 1];
-
-      // Update Pollutant Table
-      document.getElementById('pollutant-pm25').textContent = pm2_5 ? `${pm2_5} µg/m³` : '--';
-      document.getElementById('pollutant-pm10').textContent = pm10 ? `${pm10} µg/m³` : '--';
-      document.getElementById('pollutant-co').textContent = co ? `${co} ppm` : '--';
-      document.getElementById('pollutant-no2').textContent = no2 ? `${no2} ppb` : '--';
-
-      // Update Recommendations
-      const recommendationsList = document.getElementById('recommendations-list');
-      recommendationsList.innerHTML = ''; // Clear previous recommendations
-      const recommendations = getRecommendations(aqi);
-      recommendations.forEach((recommendation) => {
-        const li = document.createElement('li');
-        li.textContent = recommendation;
-        recommendationsList.appendChild(li);
-      });
-
-      // Update the label on the globe
-      globe
-        .labelsData([{ lat, lon, city: `AQI: ${aqi}` }])
-        .labelText(d => `${d.city}: AQI Level - ${aqiCategory}`)
-        .labelColor(() => getPollutantColor(aqi));
-
+    if (response.ok) {
+      const data = await response.json();
+      if (data.list && data.list[0] && data.list[0].components) {
+        displayAirQualityInfo(data, temperature, humidity, city);
+        updateCharts(data.list[0].components); // Pass the pollutant data correctly
+      } else {
+        alert("No pollutant data available for this location.");
+      }
     } else {
-      console.error('No valid air quality data available:', data);
+      alert("Failed to fetch air quality data.");
     }
   } catch (error) {
-    console.error('Error updating dashboard:', error);
+    console.error("Error fetching air quality data:", error);
+    alert("Network error. Please try again.");
   }
 };
 
-const getPollutantColor = (aqi) => {
-  switch (aqi) {
-    case 1: return '#4caf50'; // Good
-    case 2: return '#ffeb3b'; // Fair
-    case 3: return '#ff9800'; // Moderate
-    case 4: return '#ff5722'; // Poor
-    case 5: return '#f44336'; // Very Poor
-    default: return '#fff';
-  }
+// Display air quality information
+const displayAirQualityInfo = (data, temperature, humidity, city) => {
+  const aqi = data.list[0].main.aqi;
+  const aqiQuality = getAqiQuality(aqi);
+
+  document.getElementById('cityName').textContent = city;
+  document.getElementById('aqiValue').textContent = aqi;
+  document.getElementById('aqiQuality').textContent = aqiQuality;
+  document.getElementById('temperature').textContent = temperature;
+  document.getElementById('humidity').textContent = humidity;
+  document.getElementById('cityDetails').style.display = 'block';
 };
 
-const getRecommendations = (aqi) => {
-  if (aqi === 1) return ['Enjoy outdoor activities.', 'No health impacts.'];
-  if (aqi === 2) return ['Sensitive groups should limit outdoor exercise.'];
-  if (aqi === 3) return ['Consider reducing outdoor exercise.', 'Close windows to avoid pollution.'];
-  if (aqi === 4) return ['Stay indoors.', 'Use air purifiers if possible.'];
-  if (aqi === 5) return ['Avoid outdoor activities.', 'Wear a mask.'];
-  return ['No recommendations available.'];
+const getAqiQuality = (aqi) => {
+  if (aqi === 1) return 'Good';
+  if (aqi === 2) return 'Fair';
+  if (aqi === 3) return 'Moderate';
+  if (aqi === 4) return 'Poor';
+  if (aqi === 5) return 'Very Poor';
+  return 'Unknown';
+};
+
+// Initialize charts
+let lineChart, barChart, doughnutChart;
+
+const initializeCharts = () => {
+  const lineCtx = document.getElementById('lineChart').getContext('2d');
+  const barCtx = document.getElementById('barChart').getContext('2d');
+  const doughnutCtx = document.getElementById('doughnutChart').getContext('2d');
+
+  lineChart = new Chart(lineCtx, {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Pollutants', data: [], borderColor: 'blue', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: true },
+  });
+
+  barChart = new Chart(barCtx, {
+    type: 'bar',
+    data: { labels: ['PM2.5', 'PM10', 'NO2', 'NH3', 'SO2'], datasets: [{ label: 'Levels', data: [], backgroundColor: ['red', 'blue', 'green', 'yellow', 'purple'] }] },
+    options: { responsive: true, maintainAspectRatio: true },
+  });
+
+  doughnutChart = new Chart(doughnutCtx, {
+    type: 'doughnut',
+    data: { labels: ['PM2.5', 'PM10', 'NO2', 'NH3', 'SO2'], datasets: [{ data: [], backgroundColor: ['red', 'blue', 'green', 'yellow', 'purple'] }] },
+    options: { responsive: true, maintainAspectRatio: true },
+  });
+};
+
+const updateCharts = (components) => {
+  const { pm2_5, pm10, no2, nh3, so2 } = components;
+
+  // Ensure the pollutant data is displayed correctly on the charts
+  lineChart.data.labels = ['PM2.5', 'PM10', 'NO2', 'NH3', 'SO2'];
+  lineChart.data.datasets[0].data = [pm2_5, pm10, no2, nh3, so2];
+  lineChart.update();
+
+  barChart.data.datasets[0].data = [pm2_5, pm10, no2, nh3, so2];
+  barChart.update();
+
+  doughnutChart.data.datasets[0].data = [pm2_5, pm10, no2, nh3, so2];
+  doughnutChart.update();
+};
+
+
+const clearPreviousCityData = () => {
+  document.getElementById('cityDetails').style.display = 'none';
+  document.getElementById('cityName').textContent = '';
+  document.getElementById('aqiValue').textContent = '';
+  document.getElementById('aqiQuality').textContent = '';
+  document.getElementById('temperature').textContent = '';
+  document.getElementById('humidity').textContent = '';
+};
+
+const showSection = (section) => {
+  document.getElementById('globeViz').style.display = 'none';
+  document.getElementById('dataSection').style.display = 'none';
+  document.getElementById('rankingSection').style.display = 'none';
+  document.getElementById('aboutSection').style.display = 'none';
+
+  if (section === 'home') document.getElementById('globeViz').style.display = 'block';
+  if (section === 'data') document.getElementById('dataSection').style.display = 'block';
+  if (section === 'ranking') document.getElementById('rankingSection').style.display = 'block';
+  if (section === 'about') document.getElementById('aboutSection').style.display = 'block';
 };
